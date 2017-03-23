@@ -46,8 +46,14 @@ fn start_dash(){
         match io::stdin().read_line(&mut input) {
             Ok(n) => {
                 // println!("{} bytes read", n);
-                input.pop(); //pop \n                
-            }
+                if n ==0{
+                    break
+                }
+                else{
+                    input.pop(); //pop \n                
+                }
+            },
+            // Ok(0) => break,
             Err(error) => println!("error: {}", error),
         }
 

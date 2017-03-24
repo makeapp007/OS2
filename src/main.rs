@@ -1,7 +1,7 @@
 use std::io;
 use std::io::Write;
 extern crate libc;
-use libc::{system,fork,execvp,waitpid};
+use libc::{system,fork,execvp,waitpid,kill};
 use libc::c_char;
 use std::ffi::{CStr,CString};
 use std::str;
@@ -86,6 +86,12 @@ fn start_dash(){
             }
             else if input_ele[0]=="history"{
                 print_history(& history_store);
+            }
+            else if input_ele[0]=="kill"{
+                // SIGTERM  15
+                unsafe{
+                    kill(input_ele[1].parse().unwrap(),15);   
+                }
             }
             else if input_ele[0]=="jobs"{
                 // check alive job

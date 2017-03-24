@@ -37,6 +37,7 @@ fn print_history(history:&Vec<String> ){
 fn start_dash(){
     let mut input = String::new();
     let mut history_store: Vec<String> =Vec::new();
+    let mut job_store: Vec<String> =Vec::new();
 
     loop{
         input = String::new();
@@ -59,7 +60,9 @@ fn start_dash(){
 
 
         // parse the input
-        let input_ele: Vec<String> = input.split_whitespace().map(|x| x.to_string()).collect();
+        let mut input_ele: Vec<String> = input.split_whitespace().map(|x| x.to_string()).collect();
+        
+
 
         // execute
         if input_ele.len()==0{
@@ -84,11 +87,54 @@ fn start_dash(){
             else if input_ele[0]=="history"{
                 print_history(& history_store);
             }
+            else if input_ele[0]=="jobs"{
+                // check alive job
+
+                // println!("{:?}", job_store.len());
+                // println!("{:?}",job_store[0] );
+                if job_store.len()!=0{
+                    // let mut fork_result:i32=0;
+                    let length_job=job_store.len();
+                    let mut index=0;
+                    while true{
+                        let fork_result=job_store[index].parse().unwrap();
+                        // wnohang
+                        let mut my_num: i32 = 10;
+                        let status_job:*mut i32 =&mut my_num;
+                        unsafe{
+                            let ret_val=waitpid(fork_result,status_job,1);
+                            if ret_val!=-1{
+                                if ret_val!=0{
+                                    job_store.remove(index);
+                                    job_store.remove(index);    
+                                }
+                            }
+                            else{
+                                index=index+2;
+                            }
+                        }
+
+                        if index<length_job-1{
+                            break;
+                        }
+                    }
+                }
+                let mut index=0; //only print 2rd, fourth index
+                for i in &job_store{
+                    if index %2 ==1{
+                        println!("{}",i);
+                    }
+                    index=index+1;
+
+                }
+            }
             else{
                 // external command
                 // fork and execvp
+                // fork_result means pid
                 unsafe{
                     let fork_result=fork();
+
                     if fork_result< 0 {
                         println!("Fail to fork");
 
@@ -96,42 +142,77 @@ fn start_dash(){
                     else if fork_result==0{
                         // in child's process
                         let command=input_ele[0].clone();
-                        let c_command=CString::new(command).unwrap();
-                        // input_ele.iter().next();
-                        // input_ele.iter().next() ;
-                        // println!("------left is {:?}",input_ele.iter().next() );
+                        // input_ele.remove(0);
+                        let length=input_ele.len();
+                        if length>0{
+                            if input_ele[length-1]=="&"{
+                                // so will this change parents' input_ele
+                                input_ele.remove(length-1);
 
-                        // fetch the correct data?
-                        let cstr_argv: Vec<_> = input_ele.iter()
-                                .map(|arg| CString::new(arg.as_str()).unwrap())
-                                .collect();
-                        // for i in &cstr_argv{
-                        //     println!("-----{:?}", i);
-                        // }
+                            }
+                        }    
+                        
+                            let c_command=CString::new(command).unwrap();
+                            // input_ele.iter().next();
+                            // input_ele.iter().next() ;
+                            // println!("------left is {:?}",input_ele.iter().next() );
 
-                        let mut p_argv: Vec<_> = cstr_argv.iter()
-                                .map(|arg| arg.as_ptr())
-                                .collect();
-                        // for i in &p_argv{
-                        //     println!("====={:?}", i);
-                        // }
+                            // fetch the correct data?
+                            let cstr_argv: Vec<_> = input_ele.iter()
+                                    .map(|arg| CString::new(arg.as_str()).unwrap())
+                                    .collect();
+                            // for i in &cstr_argv{
+                            //     println!("-----{:?}", i);
+                            // }
 
-                        p_argv.push(std::ptr::null());
-                        let p: *const *const c_char = p_argv.as_ptr();
-                        let ret_val=execvp(c_command.as_ptr(),p);
-                        // println!("ret_val is {}",ret_val);
+                            let mut p_argv: Vec<_> = cstr_argv.iter()
+                                    .map(|arg| arg.as_ptr())
+                                    .collect();
+                            // for i in &p_argv{
+                            //     println!("====={:?}", i);
+                            // }
+
+                            p_argv.push(std::ptr::null());
+                            let p: *const *const c_char = p_argv.as_ptr();
+                            execvp(c_command.as_ptr(),p);
+                            // println!("ret_val is {}",ret_val);
+                            
                     }
                     else {
                         // in parents' process
-                        let mut my_num: i32 = 10;
-                        let status: *mut i32 = &mut my_num;
-                        let ret_val=waitpid(fork_result,status,0);
+                        
+                        // if execute in the background,no need to wait
+                        let length=input_ele.len();
+                        // println!("{:?}",input_ele );
+                        if input_ele[length-1]=="&"{
+                            // remove &
+                            input_ele.remove(length-1);
+                            let input_string:String=input_ele.join(" ");
+                            let fork_result_str=String::from(fork_result.to_string());
+                            job_store.push(fork_result_str);
+                            job_store.push(input_string);
 
+                            // for i in input_ele_job{
+                            //     input_string.push_str(i);
+
+                            // }
+                            // store the command
+                            // println!("{:?}",input_string );
+                            // add_to_job(&input_ele,);    
+                        }
+                        else{
+                            // else do it interactively, so wait
+                            let mut my_num: i32 = 10;
+                            let status: *mut i32 = &mut my_num;
+                            // wnohang
+                            waitpid(fork_result,status,0);
+
+                        }    
                     }
                 }
             }
             history_store.push(input.clone());
-            
+            // println!("length is {}",job_store.len() );
         }
 
         // store it to history

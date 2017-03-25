@@ -120,7 +120,7 @@ fn start_dash(){
                     local_command_end+=1; //so including this index
                 }
                 // println!("start command is  {:?}",input_ele[local_command_start] );
-                // println!("{:?}",input_ele[local_command_end] );
+                // println!("end  command is {:?}",input_ele[local_command_end] );
 
                 // println!("start is {:?}, end is {}", local_command_start,local_command_end);
                 // got the start and end, start to fork child process
@@ -237,7 +237,7 @@ fn start_dash(){
                                     }
                                     left_index+=1;
                                 }
-
+                                // println!("left_index is {:?}",left_index );
                                 // redirect
                                 // open the file
                                 // if no <, left_index will exceed input_ele.len-1
@@ -256,6 +256,7 @@ fn start_dash(){
                                             // dup success
                                             input_ele.remove(left_index);
                                             input_ele.remove(left_index);
+                                            local_command_end-=2;
                                             
                                         }
                                         close(ret_open);
@@ -347,7 +348,7 @@ fn start_dash(){
                 j=j+2;
                 pipe_index=pipe_index-1;
                 local_command_start=local_command_end+1;
-                local_command_end=local_command_start;  // they should on the same step
+                local_command_end=local_command_start;  // they should on the same step 
 
                 // println!("other end is {:?}",local_command_end );
                 // println!("other start is {:?}",local_command_start );

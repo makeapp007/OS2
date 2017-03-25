@@ -75,7 +75,79 @@ fn start_dash(){
 
 
 
+        if pipe_count!=0{
 
+            let mut v = vec![0; pipe_count*2]; // ten zeroes
+            let v_slice=(&mut v[..]).as_mut_ptr();
+
+            let mut while_index_pipe=0;
+            let mut while_pipe_true=false;
+            if pipe_count>0{
+                while_pipe_true=true;
+            }
+            while while_pipe_true{
+                let ii:isize=while_index_pipe as isize;
+                unsafe{
+                    if pipe(v_slice.offset(ii))<0 {
+                        println!("fail to build pipe" );
+
+                    }
+                    else{
+                        println!("succeed to pipe");
+                    }
+                }    
+                while_index_pipe+=2;
+                if while_index_pipe>=pipe_count*2{
+                    break;
+                }
+            }
+
+            let mut pipe_index=pipe_count; 
+            let mut command_index=0;  //input's index
+            let mut j=0; //index to v's array
+            while true{ 
+                if pipe_index<=0{
+                    break;
+                }
+                unsafe{
+                    let fork_result=fork();
+                    if fork_result==0{
+                        // not the last command, dup2 1
+                        if pipe_index-1 >0 {
+                            if dup2(v[j+1],1)<0{
+                                println!("fail to dup2");
+                            }
+                        }
+                        // not the first command
+                        if j!=0{
+                            if dup2(v[j-2],0)<0{
+                                println!("fail to dup2");
+                            }
+
+                        }
+                        // start to close
+                        for i in &v{
+                            close(*i);
+                        }
+                        // execute command
+
+
+                    }
+                    else if fork_result<0{
+                        println!("fail to fork in pipe");
+                    }
+
+                    j=j+2;
+                    pipe_index=pipe_index-1;
+
+                }
+
+            }
+            // wait or not wait
+
+
+        }
+        else{
             // no pipe, execute it immediately
             if input_ele.len()==0{
                 history_store.push(input.clone());
@@ -164,69 +236,70 @@ fn start_dash(){
                             // input_ele.remove(0);
 
                             // if contains < 
-                            if input_ele.len()>0{
-                                let mut left_index=0;
-                                // find the <
-                                for i in &input_ele{
-                                    if i=="<"{
-                                        break;
-                                    }
-                                    left_index+=1;
-                                }
-                                // redirect
-                                // open the file
-                                if left_index<input_ele.len()-1{
-                                    let file_name=CString::new(input_ele[left_index+1].clone()).unwrap();
-                                    let ret_open=open(file_name.as_ptr(),O_RDONLY);
-                                    if ret_open<0{
-                                        println!("fail to open the file");
-                                    }
-                                    else{
-                                        // open success
-                                        if dup2(ret_open,0)<0{
-                                            println!("fail to dup2");
-                                        }
-                                        else{
-                                            // dup success
-                                            input_ele.remove(left_index);
-                                            input_ele.remove(left_index);
-                                            close(ret_open);
-                                        }
-                                    }
-                                }                                
-                            }
-                            // println!("{:?}",input_ele.len() );
-                            // if contains >
-                            if input_ele.len()>0{
-                                let mut right_index=0;
-                                // find the <
-                                for i in &input_ele{
-                                    if i==">"{
-                                        break;
-                                    }
-                                    right_index+=1;
-                                }
-                                // redirect
-                                // open the file
-                                if right_index<input_ele.len()-1{
-                                    let file_name=CString::new(input_ele[right_index+1].clone()).unwrap();
-                                    let ret_write=open(file_name.as_ptr(),O_WRONLY|O_CREAT,S_IRWXU);
-                                    if ret_write<0{
-                                        println!("fail to open the written file");
-                                    }
-                                    else{
-                                        if dup2(ret_write,1)<0{
-                                            println!("fail to dup2");
-                                        }
-                                        else{
+                            // if input_ele.len()>0{
+                            //     let mut left_index=0;
+                            //     // find the <
+                            //     for i in &input_ele{
+                            //         if i=="<"{
+                            //             break;
+                            //         }
+                            //         left_index+=1;
+                            //     }
+                            //     // redirect
+                            //     // open the file
+                            //     // if no <, left_index will exceed input_ele.len-1
+                            //     if left_index<input_ele.len()-1{
+                            //         let file_name=CString::new(input_ele[left_index+1].clone()).unwrap();
+                            //         let ret_open=open(file_name.as_ptr(),O_RDONLY);
+                            //         if ret_open<0{
+                            //             println!("fail to open the file");
+                            //         }
+                            //         else{
+                            //             // open success
+                            //             if dup2(ret_open,0)<0{
+                            //                 println!("fail to dup2");
+                            //             }
+                            //             else{
+                            //                 // dup success
+                            //                 input_ele.remove(left_index);
+                            //                 input_ele.remove(left_index);
+                            //                 close(ret_open);
+                            //             }
+                            //         }
+                            //     }                                
+                            // }
+                            // // println!("{:?}",input_ele.len() );
+                            // // if contains >
+                            // if input_ele.len()>0{
+                            //     let mut right_index=0;
+                            //     // find the <
+                            //     for i in &input_ele{
+                            //         if i==">"{
+                            //             break;
+                            //         }
+                            //         right_index+=1;
+                            //     }
+                            //     // redirect
+                            //     // open the file
+                            //     if right_index<input_ele.len()-1{
+                            //         let file_name=CString::new(input_ele[right_index+1].clone()).unwrap();
+                            //         let ret_write=open(file_name.as_ptr(),O_WRONLY|O_CREAT,S_IRWXU);
+                            //         if ret_write<0{
+                            //             println!("fail to open the written file");
+                            //         }
+                            //         else{
+                            //             if dup2(ret_write,1)<0{
+                            //                 println!("fail to dup2");
+                            //             }
+                            //             else{
 
-                                            input_ele.remove(right_index);
-                                            input_ele.remove(right_index);
-                                            close(ret_write);
-                                        }
-                                    }    
-                                }                                
-                            }
+                            //                 input_ele.remove(right_index);
+                            //                 input_ele.remove(right_index);
+                            //                 close(ret_write);
+                            //             }
+                            //         }    
+                            //     }                                
+                            // }
                             // println!("{:?}",input_ele.len() );
 
 
@@ -301,7 +374,7 @@ fn start_dash(){
                 }
                 history_store.push(input.clone());
             }
-            
+        }    
         // store it to history
         
 // pub unsafe extern fn execvp(c: *const c_char,

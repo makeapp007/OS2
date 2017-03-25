@@ -95,7 +95,7 @@ fn start_dash(){
                         println!("fail to build pipe" );
                     }
                     else{
-                        println!("succeed to pipe");
+                        // println!("succeed to pipe");
                     }
                 }    
                 while_index_pipe+=2;
@@ -119,8 +119,8 @@ fn start_dash(){
                     }
                     local_command_end+=1; //so including this index
                 }
-                println!("start command is  {:?}",input_ele[local_command_start] );
-                println!("{:?}",input_ele[local_command_end] );
+                // println!("start command is  {:?}",input_ele[local_command_start] );
+                // println!("{:?}",input_ele[local_command_end] );
 
                 // println!("start is {:?}, end is {}", local_command_start,local_command_end);
                 // got the start and end, start to fork child process
@@ -223,8 +223,8 @@ fn start_dash(){
                             // just execute
                             let command=input_ele[local_command_start].clone();
                             // check <
-                            println!("command is {:?}",command );
-                            println!("external end is {:?},start is {}",local_command_end,local_command_start );
+                            // println!("command is {:?}",command );
+                            // println!("external end is {:?},start is {}",local_command_end,local_command_start );
                             if local_command_end-local_command_start>0{
                                 let mut left_index=local_command_start;
                                 // find the <

@@ -2,14 +2,13 @@
 use std::io;
 use std::io::Write;
 extern crate libc;
-use libc::{system,fork,execvp,waitpid,kill,pipe,dup2,close,open};
-use libc::{O_RDONLY,O_RDWR,O_WRONLY,O_CREAT,S_IRWXU,O_TRUNC};
+use libc::{system,fork,execvp,waitpid,wait,kill,pipe,dup2,close,open};
+use libc::{O_RDONLY,O_WRONLY,O_CREAT,S_IRWXU,O_TRUNC};
 use libc::c_char;
 use std::ffi::{CStr,CString};
 use std::str;
 use std::env;
 use std::path::Path;
-use std::process;
 
 
 //d #[derive(Debug)]
@@ -61,174 +60,489 @@ fn start_dash(){
         }
 
 
+
         // parse the input
         let mut input_ele: Vec<String> = input.split_whitespace().map(|x| x.to_string()).collect();
-        
 
-
-        // execute
-        if input_ele.len()==0{
-            history_store.push(input.clone());
-            continue;
+        // counting how many pipes are there
+        let mut pipe_count=0;
+        for i in &input_ele{
+            // autoderef
+            if i =="|"{
+                pipe_count=pipe_count+1;
+            }
         }
-        else{
-            if input_ele[0]=="pwd"{
-                exec_pwd();
+        // println!("pipe_count is  {:?}",pipe_count );
+
+
+
+        if pipe_count!=0{
+
+            let mut v = vec![0; pipe_count*2]; // ten zeroes
+            let v_slice=(&mut v[..]).as_mut_ptr();
+
+            let mut while_index_pipe=0;
+            let mut while_pipe_true=false;
+            if pipe_count>0{
+                while_pipe_true=true;
             }
-            else if input_ele[0]=="cd"{
-                if input_ele.len()==2 {
-                    exec_cd(&input_ele[1]);
-                }
-                else{
-                    println!("Wrong parameters");
-                }
-            }
-            else if input_ele[0]=="exit"{
-                // process::exit(0);
-                break;
-            }
-            else if input_ele[0]=="history"{
-                print_history(& history_store);
-            }
-            else if input_ele[0]=="kill"{
-                // SIGTERM  15
+            // build the pipe
+            while while_pipe_true{
+                let ii:isize=while_index_pipe as isize;
                 unsafe{
-                    kill(input_ele[1].parse().unwrap(),15);   
+                // println!("offset is {:?}",v_slice.offset(ii) );
+                    if pipe(v_slice.offset(ii))<0 {
+                        println!("fail to build pipe" );
+                    }
+                    else{
+                        println!("succeed to pipe");
+                    }
+                }    
+                while_index_pipe+=2;
+                if while_index_pipe>=pipe_count*2{
+                    break;
                 }
             }
-            else if input_ele[0]=="jobs"{
-                // check alive job
 
-                // println!("{:?}", job_store.len());
-                // println!("{:?}",job_store[0] );
-                if job_store.len()!=0{
-                    // let mut fork_result:i32=0;
-                    let length_job=job_store.len();
-                    let mut index=0;
-                    while true{
-                        let fork_result=job_store[index].parse().unwrap();
-                        // wnohang
-                        let mut my_num: i32 = 10;
-                        let status_job:*mut i32 =&mut my_num;
-                        unsafe{
-                            let ret_val=waitpid(fork_result,status_job,1);
-                            if ret_val!=-1{
-                                if ret_val!=0{
-                                    job_store.remove(index);
-                                    job_store.remove(index);    
-                                }
-                            }
-                            else{
-                                index=index+2;
-                            }
-                        }
-
-                        if index<length_job-1{
-                            break;
-                        }
-                    }
+            let mut pipe_index=pipe_count; 
+            let mut local_command_start=0;  //input's index
+            let mut local_command_end=0;  //input's index
+            let mut j=0; //index to v's array
+            while true{ 
+                if pipe_index<=0{
+                    break;
                 }
-                let mut index=0; //only print 2rd, fourth index
-                for i in &job_store{
-                    if index %2 ==1{
-                        println!("{}",i);
+                let l1=input_ele.len(); 
+                for i in local_command_start..l1{ //[start,l1)
+                    if input_ele[i]=="|"{ 
+                        break;
                     }
-                    index=index+1;
-
+                    local_command_end+=1; //so including this index
                 }
-            }
-            else{
-                // external command
-                // fork and execvp
-                // fork_result means pid
+                println!("start command is  {:?}",input_ele[local_command_start] );
+                println!("{:?}",input_ele[local_command_end] );
+
+                // println!("start is {:?}, end is {}", local_command_start,local_command_end);
+                // got the start and end, start to fork child process
                 unsafe{
                     let fork_result=fork();
+                    if fork_result==0{
+                        // not the last command, dup2 1
+                        if pipe_index-1 >0 {
+                            if dup2(v[j+1],1)<0{
+                                println!("fail to dup2");
+                            }
+                        }
+                        // not the first command
+                        if j!=0{
+                            if dup2(v[j-2],0)<0{
+                                println!("fail to dup2");
+                            }
 
-                    if fork_result< 0 {
-                        println!("Fail to fork");
+                        }
+                        // start to close
+                        for i in &v{
+                            close(*i);
+                        }
+            
+                        // execute
+                        if input_ele[local_command_start]=="pwd"{
+                            exec_pwd();
+                            unsafe{     libc::exit(0);      }
+                        }
+                        else if input_ele[local_command_start]=="cd"{
+                            if input_ele.len()==2 {
+                                exec_cd(&input_ele[local_command_start+1]);
+                            }
+                            else{
+                                println!("Wrong parameters");
+                            }
+                            unsafe{     libc::exit(0);      }
+                        }
+                        else if input_ele[local_command_start]=="exit"{
+                            unsafe{     libc::exit(0);      }
+                            // break;
+                        }
+                        else if input_ele[local_command_start]=="history"{
+                            // redirect
+
+                            print_history(& history_store);
+                            unsafe{     libc::exit(0);      }
+                        }
+                        else if input_ele[local_command_start]=="kill"{
+                            // SIGTERM  15
+                            unsafe{
+                                kill(input_ele[local_command_start+1].parse().unwrap(),15);   
+                            }
+                            unsafe{     libc::exit(0);      }
+                        }
+                        else if input_ele[local_command_start]=="jobs"{
+                            // check alive job
+
+                            // println!("{:?}", job_store.len());
+                            // println!("{:?}",job_store[0] );
+                            if job_store.len()!=0{
+                                // let mut fork_result:i32=0;
+                                let length_job=job_store.len();
+                                let mut index=0;
+                                while true{
+                                    let fork_result=job_store[index].parse().unwrap();
+                                    // wnohang
+                                    let mut my_num: i32 = 10;
+                                    let status_job:*mut i32 =&mut my_num;
+                                    unsafe{
+                                        let ret_val=waitpid(fork_result,status_job,1);
+                                        if ret_val!=-1{
+                                            if ret_val!=0{
+                                                job_store.remove(index);
+                                                job_store.remove(index);    
+                                            }
+                                        }
+                                        else{
+                                            index=index+2;
+                                        }
+                                    }
+
+                                    if index<length_job-1{
+                                        break;
+                                    }
+                                }
+                            }
+                            let mut index=0; //only print 2rd, fourth index
+                            for i in &job_store{
+                                if index %2 ==1{
+                                    println!("{}",i);
+                                }
+                                index=index+1;
+
+                            }
+                            unsafe{     libc::exit(0);      }
+                        }
+                        else{
+                            // external command
+                            // just execute
+                            let command=input_ele[local_command_start].clone();
+                            // check <
+                            println!("command is {:?}",command );
+                            println!("external end is {:?},start is {}",local_command_end,local_command_start );
+                            if local_command_end-local_command_start>0{
+                                let mut left_index=local_command_start;
+                                // find the <
+                                while true{
+                                    if left_index>=local_command_end{
+                                        break;
+                                    }
+                                    if input_ele[left_index]=="<"{
+                                        break;
+                                    }
+                                    left_index+=1;
+                                }
+
+                                // redirect
+                                // open the file
+                                // if no <, left_index will exceed input_ele.len-1
+                                if left_index<local_command_end-1{
+                                    let file_name=CString::new(input_ele[left_index+1].clone()).unwrap();
+                                    let ret_open=open(file_name.as_ptr(),O_RDONLY);
+                                    if ret_open<0{
+                                        println!("fail to open the file");
+                                    }
+                                    else{
+                                        // open success
+                                        if dup2(ret_open,0)<0{
+                                            println!("fail to dup2");
+                                        }
+                                        else{
+                                            // dup success
+                                            input_ele.remove(left_index);
+                                            input_ele.remove(left_index);
+                                            
+                                        }
+                                        close(ret_open);
+                                    }
+                                }                                
+                            }
+                            // println!("{:?}",input_ele.len() );
+                            // if contains >
+                            if local_command_end-local_command_start>0{
+                                let mut right_index=local_command_start;
+                                // find the <
+                                while true{
+                                    if right_index>=local_command_end{
+                                        break;
+                                    }
+                                    if input_ele[right_index]==">"{
+                                        break;
+                                    }
+                                    right_index+=1;
+                                }
+
+                                // redirect
+                                // open the file
+                                if right_index<local_command_end-1{
+                                    let file_name=CString::new(input_ele[right_index+1].clone()).unwrap();
+                                    let ret_write=open(file_name.as_ptr(),O_WRONLY|O_CREAT|O_TRUNC,S_IRWXU);
+                                    if ret_write<0{
+                                        println!("fail to open the written file");
+                                    }
+                                    else{
+                                        if dup2(ret_write,1)<0{
+                                            println!("fail to dup2");
+                                        }
+                                        else{
+
+                                            input_ele.remove(right_index);
+                                            input_ele.remove(right_index);
+                                        }
+                                        close(ret_write);
+                                    }    
+                                }                                
+                            }
+                            let length=input_ele.len();
+                            if local_command_end-local_command_start>0{
+                                if input_ele[local_command_end-1]=="&"{
+                                    // so will this change parents' input_ele
+                                    input_ele.remove(local_command_end-1);
+
+                                }
+                            }                                        
+                            let c_command=CString::new(command).unwrap();
+                            
+                            let mut temp_vec_command: Vec<String> =Vec::new();
+                            for i in local_command_start..local_command_end{
+                                temp_vec_command.push(input_ele[i].clone())
+                            }
+                            let cstr_argv: Vec<_> = temp_vec_command.iter()
+                                    .map(|arg| CString::new(arg.as_str()).unwrap())
+                                    .collect();
+                            let mut p_argv: Vec<_> = cstr_argv.iter()
+                                    .map(|arg| arg.as_ptr())
+                                    .collect();
+                            p_argv.push(std::ptr::null());
+                            let p: *const *const c_char = p_argv.as_ptr();
+                            execvp(c_command.as_ptr(),p);
+                        }
+                        // history_store.push(input.clone());
+                        // println!("length is {}",job_store.len() );
+                    }
+                    else if fork_result>0{
+                        // in parents' process
+                        if input_ele[input_ele.len()-1]=="&"{
+                            // record each processes' pid 
+                            // input_ele.remove(length-1);
+                            let mut temp_vec_command: Vec<String> =Vec::new();
+                            for i in local_command_start..local_command_end{
+                                temp_vec_command.push(input_ele[i].clone())
+                            }
+                            let input_string:String=temp_vec_command.join(" ");
+                            let fork_result_str=String::from(fork_result.to_string());
+                            job_store.push(fork_result_str);
+                            job_store.push(input_string);
+                        }    
+                    }
+                    else if fork_result<0{
+                        println!("fail to fork in pipe");
+                    }
+                }
+                j=j+2;
+                pipe_index=pipe_index-1;
+                local_command_start=local_command_end+1;
+                local_command_end=local_command_start;  // they should on the same step
+
+                // println!("other end is {:?}",local_command_end );
+                // println!("other start is {:?}",local_command_start );
+            }
+
+            // in parent's process
+            // close the pipe
+            unsafe{
+                for i in 0..pipe_count{
+                    close(v[i]);
+                }                
+
+                // wait or not wait
+                if input_ele[input_ele.len()-1]!="&"{
+                    for i in 0..pipe_count{
+                        let mut my_num: i32 = 10;
+                        let status: *mut i32 = &mut my_num;
+                        wait(status);
+                    }
+                }    
+            }
+
+            // store to history
+            history_store.push(input.clone());
+
+        }
+        else{
+
+        // no pipe
+            // execute
+            if input_ele.len()==0{
+                history_store.push(input.clone());
+                continue;
+            }
+            else{
+                if input_ele[0]=="pwd"{
+                    exec_pwd();
+                }
+                else if input_ele[0]=="cd"{
+                    if input_ele.len()==2 {
+                        exec_cd(&input_ele[1]);
+                    }
+                    else{
+                        println!("Wrong parameters");
+                    }
+                }
+                else if input_ele[0]=="exit"{
+                    // process::exit(0);
+                    // println!("calling exit ");
+                    unsafe{
+                        libc::exit(0);
+                    }
+                }
+                else if input_ele[0]=="history"{
+                    print_history(& history_store);
+                }
+                else if input_ele[0]=="kill"{
+                    // SIGTERM  15
+                    unsafe{
+                        kill(input_ele[1].parse().unwrap(),15);   
+                    }
+                }
+                else if input_ele[0]=="jobs"{
+                    // check alive job
+
+                    // println!("{:?}", job_store.len());
+                    // println!("{:?}",job_store[0] );
+                    if job_store.len()!=0{
+                        // let mut fork_result:i32=0;
+                        let length_job=job_store.len();
+                        let mut index=0;
+                        while true{
+                            let fork_result=job_store[index].parse().unwrap();
+                            // wnohang
+                            let mut my_num: i32 = 10;
+                            let status_job:*mut i32 =&mut my_num;
+                            unsafe{
+                                let ret_val=waitpid(fork_result,status_job,1);
+                                if ret_val!=-1{
+                                    if ret_val!=0{
+                                        job_store.remove(index);
+                                        job_store.remove(index);    
+                                    }
+                                }
+                                else{
+                                    index=index+2;
+                                }
+                            }
+
+                            if index<length_job-1{
+                                break;
+                            }
+                        }
+                    }
+                    let mut index=0; //only print 2rd, fourth index
+                    for i in &job_store{
+                        if index %2 ==1{
+                            println!("{}",i);
+                        }
+                        index=index+1;
 
                     }
-                    else if fork_result==0{
-                        // in child's process
-                        let command=input_ele[0].clone();
-                        // input_ele.remove(0);
-                        if input_ele.len()>0{
-                            let mut left_index=0;
-                            // find the <
-                            for i in &input_ele{
-                                if i=="<"{
-                                    break;
+                }
+                else{
+                    // external command
+                    // fork and execvp
+                    // fork_result means pid
+                    unsafe{
+                        let fork_result=fork();
+
+                        if fork_result< 0 {
+                            println!("Fail to fork");
+
+                        }
+                        else if fork_result==0{
+                            // in child's process
+                            let command=input_ele[0].clone();
+                            // input_ele.remove(0);
+                            if input_ele.len()>0{
+                                let mut left_index=0;
+                                // find the <
+                                for i in &input_ele{
+                                    if i=="<"{
+                                        break;
+                                    }
+                                    left_index+=1;
                                 }
-                                left_index+=1;
-                            }
-                            // redirect
-                            // open the file
-                            // if no <, left_index will exceed input_ele.len-1
-                            if left_index<input_ele.len()-1{
-                                let file_name=CString::new(input_ele[left_index+1].clone()).unwrap();
-                                let ret_open=open(file_name.as_ptr(),O_RDONLY);
-                                if ret_open<0{
-                                    println!("fail to open the file");
-                                }
-                                else{
-                                    // open success
-                                    if dup2(ret_open,0)<0{
-                                        println!("fail to dup2");
+                                // redirect
+                                // open the file
+                                // if no <, left_index will exceed input_ele.len-1
+                                if left_index<input_ele.len()-1{
+                                    let file_name=CString::new(input_ele[left_index+1].clone()).unwrap();
+                                    let ret_open=open(file_name.as_ptr(),O_RDONLY);
+                                    if ret_open<0{
+                                        println!("fail to open the file");
                                     }
                                     else{
-                                        // dup success
-                                        input_ele.remove(left_index);
-                                        input_ele.remove(left_index);
-                                        
+                                        // open success
+                                        if dup2(ret_open,0)<0{
+                                            println!("fail to dup2");
+                                        }
+                                        else{
+                                            // dup success
+                                            input_ele.remove(left_index);
+                                            input_ele.remove(left_index);
+                                            
+                                        }
+                                        close(ret_open);
                                     }
-                                    close(ret_open);
-                                }
-                            }                                
-                        }
-                        // println!("{:?}",input_ele.len() );
-                        // if contains >
-                        if input_ele.len()>0{
-                            let mut right_index=0;
-                            // find the <
-                            for i in &input_ele{
-                                if i==">"{
-                                    break;
-                                }
-                                right_index+=1;
+                                }                                
                             }
-                            // redirect
-                            // open the file
-                            if right_index<input_ele.len()-1{
-                                let file_name=CString::new(input_ele[right_index+1].clone()).unwrap();
-                                let ret_write=open(file_name.as_ptr(),O_WRONLY|O_CREAT|O_TRUNC,S_IRWXU);
-                                if ret_write<0{
-                                    println!("fail to open the written file");
+                            // println!("{:?}",input_ele.len() );
+                            // if contains >
+                            if input_ele.len()>0{
+                                let mut right_index=0;
+                                // find the <
+                                for i in &input_ele{
+                                    if i==">"{
+                                        break;
+                                    }
+                                    right_index+=1;
                                 }
-                                else{
-                                    if dup2(ret_write,1)<0{
-                                        println!("fail to dup2");
+                                // redirect
+                                // open the file
+                                if right_index<input_ele.len()-1{
+                                    let file_name=CString::new(input_ele[right_index+1].clone()).unwrap();
+                                    let ret_write=open(file_name.as_ptr(),O_WRONLY|O_CREAT|O_TRUNC,S_IRWXU);
+                                    if ret_write<0{
+                                        println!("fail to open the written file");
                                     }
                                     else{
+                                        if dup2(ret_write,1)<0{
+                                            println!("fail to dup2");
+                                        }
+                                        else{
 
-                                        input_ele.remove(right_index);
-                                        input_ele.remove(right_index);
-                                    }
-                                    close(ret_write);
-                                }    
-                            }                                
-                        }
-
-
-
-                        let length=input_ele.len();
-                        if length>0{
-                            if input_ele[length-1]=="&"{
-                                // so will this change parents' input_ele
-                                input_ele.remove(length-1);
-
+                                            input_ele.remove(right_index);
+                                            input_ele.remove(right_index);
+                                        }
+                                        close(ret_write);
+                                    }    
+                                }                                
                             }
-                        }    
-                        
+
+
+
+                            let length=input_ele.len();
+                            if length>0{
+                                if input_ele[length-1]=="&"{
+                                    // so will this change parents' input_ele
+                                    input_ele.remove(length-1);
+
+                                }
+                            }    
+                            
                             let c_command=CString::new(command).unwrap();
                             // input_ele.iter().next();
                             // input_ele.iter().next() ;
@@ -238,10 +552,6 @@ fn start_dash(){
                             let cstr_argv: Vec<_> = input_ele.iter()
                                     .map(|arg| CString::new(arg.as_str()).unwrap())
                                     .collect();
-                            // for i in &cstr_argv{
-                            //     println!("-----{:?}", i);
-                            // }
-
                             let mut p_argv: Vec<_> = cstr_argv.iter()
                                     .map(|arg| arg.as_ptr())
                                     .collect();
@@ -254,42 +564,44 @@ fn start_dash(){
                             execvp(c_command.as_ptr(),p);
                             // println!("ret_val is {}",ret_val);
                             
-                    }
-                    else {
-                        // in parents' process
-                        
-                        // if execute in the background,no need to wait
-                        let length=input_ele.len();
-                        // println!("{:?}",input_ele );
-                        if input_ele[length-1]=="&"{
-                            // remove &
-                            input_ele.remove(length-1);
-                            let input_string:String=input_ele.join(" ");
-                            let fork_result_str=String::from(fork_result.to_string());
-                            job_store.push(fork_result_str);
-                            job_store.push(input_string);
-
-                            // for i in input_ele_job{
-                            //     input_string.push_str(i);
-
-                            // }
-                            // store the command
-                            // println!("{:?}",input_string );
-                            // add_to_job(&input_ele,);    
                         }
-                        else{
-                            // else do it interactively, so wait
-                            let mut my_num: i32 = 10;
-                            let status: *mut i32 = &mut my_num;
-                            // wnohang
-                            waitpid(fork_result,status,0);
+                        else {
+                            // in parents' process
+                            
+                            // if execute in the background,no need to wait
+                            let length=input_ele.len();
+                            // println!("{:?}",input_ele );
+                            if input_ele[length-1]=="&"{
+                                // remove &
+                                input_ele.remove(length-1);
+                                let input_string:String=input_ele.join(" ");
+                                let fork_result_str=String::from(fork_result.to_string());
+                                job_store.push(fork_result_str);
+                                job_store.push(input_string);
 
-                        }    
+                                // for i in input_ele_job{
+                                //     input_string.push_str(i);
+
+                                // }
+                                // store the command
+                                // println!("{:?}",input_string );
+                                // add_to_job(&input_ele,);    
+                            }
+                            else{
+                                // else do it interactively, so wait
+                                let mut my_num: i32 = 10;
+                                let status: *mut i32 = &mut my_num;
+                                // wnohang
+                                waitpid(fork_result,status,0);
+
+                            }    
+                        }
                     }
                 }
             }
             history_store.push(input.clone());
-            // println!("length is {}",job_store.len() );
+                // println!("length is {}",job_store.len() );
+             
         }
 
         // store it to history
@@ -340,16 +652,6 @@ fn start_dash(){
         // input.pop();
         // print!("{}", (8u8 as char));
     }    
-    // let mut input = String::new();
-    // loop {
-    //     print!("$ ");
-    //     let line = io::stdin().read_line(&mut input);
-    //     match line {
-    //         Ok(expr) => println!("{}", expr),
-    //         Err(_) => break,
-    //     }
-    // }
-
 }
 
 

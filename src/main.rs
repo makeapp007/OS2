@@ -224,7 +224,7 @@ fn start_dash(){
                     // fork_result means pid
                     unsafe{
                         let fork_result=fork();
-                        let mut length=input_ele.len();
+                        // let mut length=input_ele.len();
 
                         if fork_result< 0 {
                             println!("Fail to fork");
@@ -303,7 +303,7 @@ fn start_dash(){
                             // println!("{:?}",input_ele.len() );
 
 
-                            length=input_ele.len();
+                            let length=input_ele.len();
                             if length>0{
                                 if input_ele[length-1]=="&"{
                                     // so will this change parents' input_ele

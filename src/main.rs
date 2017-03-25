@@ -2,7 +2,8 @@
 use std::io;
 use std::io::Write;
 extern crate libc;
-use libc::{system,fork,execvp,waitpid,kill};
+use libc::{system,fork,execvp,waitpid,kill,pipe,dup2,close,open};
+use libc::{O_RDONLY,O_RDWR,O_WRONLY,O_CREAT,S_IRWXU};
 use libc::c_char;
 use std::ffi::{CStr,CString};
 use std::str;
@@ -150,6 +151,73 @@ fn start_dash(){
                         // in child's process
                         let command=input_ele[0].clone();
                         // input_ele.remove(0);
+                        if input_ele.len()>0{
+                            let mut left_index=0;
+                            // find the <
+                            for i in &input_ele{
+                                if i=="<"{
+                                    break;
+                                }
+                                left_index+=1;
+                            }
+                            // redirect
+                            // open the file
+                            // if no <, left_index will exceed input_ele.len-1
+                            if left_index<input_ele.len()-1{
+                                let file_name=CString::new(input_ele[left_index+1].clone()).unwrap();
+                                let ret_open=open(file_name.as_ptr(),O_RDONLY);
+                                if ret_open<0{
+                                    println!("fail to open the file");
+                                }
+                                else{
+                                    // open success
+                                    if dup2(ret_open,0)<0{
+                                        println!("fail to dup2");
+                                    }
+                                    else{
+                                        // dup success
+                                        input_ele.remove(left_index);
+                                        input_ele.remove(left_index);
+                                        close(ret_open);
+                                    }
+                                }
+                            }                                
+                        }
+                        // println!("{:?}",input_ele.len() );
+                        // if contains >
+                        if input_ele.len()>0{
+                            let mut right_index=0;
+                            // find the <
+                            for i in &input_ele{
+                                if i==">"{
+                                    break;
+                                }
+                                right_index+=1;
+                            }
+                            // redirect
+                            // open the file
+                            if right_index<input_ele.len()-1{
+                                let file_name=CString::new(input_ele[right_index+1].clone()).unwrap();
+                                let ret_write=open(file_name.as_ptr(),O_WRONLY|O_CREAT,S_IRWXU);
+                                if ret_write<0{
+                                    println!("fail to open the written file");
+                                }
+                                else{
+                                    if dup2(ret_write,1)<0{
+                                        println!("fail to dup2");
+                                    }
+                                    else{
+
+                                        input_ele.remove(right_index);
+                                        input_ele.remove(right_index);
+                                        close(ret_write);
+                                    }
+                                }    
+                            }                                
+                        }
+
+
+
                         let length=input_ele.len();
                         if length>0{
                             if input_ele[length-1]=="&"{

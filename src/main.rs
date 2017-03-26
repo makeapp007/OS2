@@ -187,12 +187,12 @@ fn start_dash(){
                             unsafe{     libc::exit(0);      }
                         }
                         else if input_ele[local_command_start]=="cd"{
-                            if input_ele.len()==2 {
+                            // if input_ele.len()==2 {
                                 exec_cd(&input_ele[local_command_start+1]);
-                            }
-                            else{
-                                println!("Wrong parameters");
-                            }
+                            // }
+                            // else{
+                                // println!("Wrong parameters");
+                            // }
                             unsafe{     libc::exit(0);      }
                         }
                         else if input_ele[local_command_start]=="exit"{
@@ -485,12 +485,12 @@ fn start_dash(){
                     exec_pwd();
                 }
                 else if input_ele[0]=="cd"{
-                    if input_ele.len()==2 {
+                    // if input_ele.len()==2 {
                         exec_cd(&input_ele[1]);
-                    }
-                    else{
-                        println!("Wrong parameters");
-                    }
+                    // }
+                    // else{
+                        // println!("Wrong parameters");
+                    // }
                 }
                 else if input_ele[0]=="exit"{
                     // process::exit(0);

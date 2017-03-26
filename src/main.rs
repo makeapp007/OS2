@@ -114,6 +114,8 @@ fn start_dash(){
             let mut local_command_end=0;  //input's index
             let mut j=0; //index to v's array
             let mut print_flag=1; //0 means print
+            let mut pids:Vec<i32> =Vec::new();
+
             while true{ 
                 if print_flag==0{
                     println!("beginning of the pipe, pipe index is {}",pipe_index );
@@ -141,6 +143,8 @@ fn start_dash(){
                 unsafe{
                     let fork_result=fork();
                     if fork_result==0{
+
+                        let mut pipe_index_close = vec![0; pipe_count*2]; //if 1, not close this pipe. if 0, close this pipe
                         // not the last command, dup2 1
                         if print_flag==0{
                             println!("****************pipe index is {:?}",pipe_index );
@@ -151,6 +155,9 @@ fn start_dash(){
                             if dup2(v[j+1],1)<0{
                                 println!("fail to dup2");
                             }
+                            else{
+                                pipe_index_close[j+1]=1;
+                            }
 
                             // println!("---------------**********" );
                         }
@@ -159,6 +166,9 @@ fn start_dash(){
                             if dup2(v[j-2],0)<0{
                                 println!("fail to dup2");
                             }
+                            else{
+                                pipe_index_close[j-2]=1;
+                            }
 
                         }
                         // start to close
@@ -166,7 +176,9 @@ fn start_dash(){
                         //     close(*i);
                         // }
                         for i in 0..pipe_count*2{
-                            close(v[i]);
+                            // if pipe_index_close[i]==0{
+                                close(v[i]);
+                            // }
                         }        
 
                         // execute
@@ -321,6 +333,7 @@ fn start_dash(){
                                 // redirect
                                 // open the file
                                 if right_index<local_command_end-1{
+                                    // println!("in right index, find > ");
                                     let file_name=CString::new(input_ele[right_index+1].clone()).unwrap();
                                     let ret_write=open(file_name.as_ptr(),O_WRONLY|O_CREAT|O_TRUNC,S_IRWXU);
                                     if ret_write<0{
@@ -337,6 +350,7 @@ fn start_dash(){
                                             local_command_end-=2;
                                         }
                                         close(ret_write);
+
                                     }    
                                 }                                
                             }
@@ -355,7 +369,8 @@ fn start_dash(){
                             
                             let mut temp_vec_command: Vec<String> =Vec::new();
                             for i in local_command_start..local_command_end{
-                                temp_vec_command.push(input_ele[i].clone())
+                                temp_vec_command.push(input_ele[i].clone());
+                                // println!("---command is {} ",input_ele[i]);
                             }
                             let cstr_argv: Vec<_> = temp_vec_command.iter()
                                     .map(|arg| CString::new(arg.as_str()).unwrap())
@@ -373,26 +388,31 @@ fn start_dash(){
                     }
                     else if fork_result>0{
                         // in parents' process
-                        if input_ele[input_ele.len()-1]=="&"{
-                            // record each processes' pid 
-                            // input_ele.remove(length-1);
-                            let mut temp_vec_command: Vec<String> =Vec::new();
-                            for i in local_command_start..local_command_end{
-                                temp_vec_command.push(input_ele[i].clone())
-                            }
-                            let input_string:String=temp_vec_command.join(" ");
-                            let fork_result_str=String::from(fork_result.to_string());
-                            job_store.push(fork_result_str);
-                            job_store.push(input_string);
-                        }
-                        else{
-                            let mut my_num: i32 = 10;
-                            let status: *mut i32 = &mut my_num;
-                            // waitpid(fork_result,status,0);
-                            let ten_millis = time::Duration::from_millis(20);
-                            thread::sleep(ten_millis);
-                            kill(fork_result,15);   
-                        }    
+                        pids.push(fork_result);
+                        // if input_ele[input_ele.len()-1]=="&"{
+                        //     // record each processes' pid 
+                        //     // input_ele.remove(length-1);
+                        //     let mut temp_vec_command: Vec<String> =Vec::new();
+                        //     for i in local_command_start..local_command_end{
+                        //         temp_vec_command.push(input_ele[i].clone())
+                        //     }
+                        //     let input_string:String=temp_vec_command.join(" ");
+                        //     let fork_result_str=String::from(fork_result.to_string());
+                        //     job_store.push(fork_result_str);
+                        //     job_store.push(input_string);
+                        // }
+                        // else{
+                        //     let mut my_num: i32 = 10;
+                        //     let status: *mut i32 = &mut my_num;
+                        //     for i in 0..pipe_count*2{
+                        //         close(v[i]);
+                        //     }                
+                            
+                        //     waitpid(fork_result,status,0);
+                        //     // let ten_millis = time::Duration::from_millis(20);
+                        //     // thread::sleep(ten_millis);
+                        //     // kill(fork_result,15);   
+                        // }    
                     }
                     else if fork_result<0{
                         println!("fail to fork in pipe");
@@ -415,11 +435,29 @@ fn start_dash(){
             // in parent's process
             // close the pipe
             unsafe{
-                // println!("---------before pringlin");
+                // close
                 for i in 0..pipe_count*2{
                     close(v[i]);
                 }                
-                // println!("---------after pringlin");
+
+                // wait
+                if input_ele[input_ele.len()-1]=="&"{
+                    
+                }
+                else{                
+                    let mut my_num: i32 = 10;
+                    let status: *mut i32 = &mut my_num;
+                    for i in pids{
+                        waitpid(i,status,0);                    
+                    }
+                }
+                
+                // println!("---------before pringlin");
+                // for i in 0..pipe_count*2{
+                //     close(v[i]);
+                // }                
+                
+                // // println!("---------after pringlin");
                 // wait or not wait
                 // if input_ele[input_ele.len()-1]!="&"{
                 //     for i in 0..pipe_count+1{

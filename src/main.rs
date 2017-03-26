@@ -9,6 +9,8 @@ use std::ffi::{CStr,CString};
 use std::str;
 use std::env;
 use std::path::Path;
+use std::{thread, time};
+
 
 
 //d #[derive(Debug)]
@@ -77,6 +79,9 @@ fn start_dash(){
 
 
         if pipe_count!=0{
+            // input_ele.push("|".to_string());
+            // input_ele.push("empty".to_string());
+            // pipe_count+=1;
 
             let mut v = vec![0; pipe_count*2]; // ten zeroes
             let v_slice=(&mut v[..]).as_mut_ptr();
@@ -104,11 +109,17 @@ fn start_dash(){
                 }
             }
 
-            let mut pipe_index=pipe_count; 
+            let mut pipe_index=pipe_count+1;  //if index=2, then one pipe. when index==0, dont break the while 
             let mut local_command_start=0;  //input's index
             let mut local_command_end=0;  //input's index
             let mut j=0; //index to v's array
+            let mut print_flag=1; //0 means print
             while true{ 
+                if print_flag==0{
+                    println!("beginning of the pipe, pipe index is {}",pipe_index );
+                }
+                // if six commands and 5 pipes,  then six times 
+                // other, the last command will not be executed
                 if pipe_index<=0{
                     break;
                 }
@@ -119,7 +130,10 @@ fn start_dash(){
                     }
                     local_command_end+=1; //so including this index
                 }
-                // println!("start command is  {:?}",input_ele[local_command_start] );
+                if print_flag==0{
+                    println!("this is in parent start command is  {:?}",input_ele[local_command_start] );
+                    println!("start is {}, end is {}",local_command_start,local_command_end );
+                }    
                 // println!("end  command is {:?}",input_ele[local_command_end] );
 
                 // println!("start is {:?}, end is {}", local_command_start,local_command_end);
@@ -128,10 +142,17 @@ fn start_dash(){
                     let fork_result=fork();
                     if fork_result==0{
                         // not the last command, dup2 1
-                        if pipe_index-1 >0 {
+                        if print_flag==0{
+                            println!("****************pipe index is {:?}",pipe_index );
+                        }
+                        if pipe_index>1 {
+                            // if pipe_index-1 >0 {
+                            // printntln!("---------------**********" );
                             if dup2(v[j+1],1)<0{
                                 println!("fail to dup2");
                             }
+
+                            // println!("---------------**********" );
                         }
                         // not the first command
                         if j!=0{
@@ -141,10 +162,13 @@ fn start_dash(){
 
                         }
                         // start to close
-                        for i in &v{
-                            close(*i);
-                        }
-            
+                        // for i in &v{
+                        //     close(*i);
+                        // }
+                        for i in 0..pipe_count*2{
+                            close(v[i]);
+                        }        
+
                         // execute
                         if input_ele[local_command_start]=="pwd"{
                             exec_pwd();
@@ -223,8 +247,10 @@ fn start_dash(){
                             // just execute
                             let command=input_ele[local_command_start].clone();
                             // check <
-                            // println!("command is {:?}",command );
-                            // println!("external end is {:?},start is {}",local_command_end,local_command_start );
+                            if print_flag==0{
+                                println!("**************************this is in child  command is {:?}",command );
+                                println!("external end is {:?},start is {}",local_command_end,local_command_start );
+                            }    
                             if local_command_end-local_command_start>0{
                                 let mut left_index=local_command_start;
                                 // find the <
@@ -237,7 +263,9 @@ fn start_dash(){
                                     }
                                     left_index+=1;
                                 }
-                                // println!("left_index is {:?}",left_index );
+                                if print_flag==0{
+                                        println!("left_index is {:?}",left_index );
+                                }        
                                 // redirect
                                 // open the file
                                 // if no <, left_index will exceed input_ele.len-1
@@ -265,6 +293,9 @@ fn start_dash(){
                             }
                             // println!("{:?}",input_ele.len() );
                             // if contains >
+                            if print_flag==0{
+                                println!("in right external end is {:?},start is {}",local_command_end,local_command_start );
+                            }    
                             if local_command_end-local_command_start>0{
                                 let mut right_index=local_command_start;
                                 // find the <
@@ -276,6 +307,15 @@ fn start_dash(){
                                         break;
                                     }
                                     right_index+=1;
+                                }
+                                if print_flag==0{
+                                    if right_index+1< input_ele.len(){
+                                        println!("right command is {:?},{}",input_ele[right_index], input_ele[right_index+1] );    
+                                    }
+                                    
+                                    println!("after right, external end is {:?},start is {}",local_command_end,local_command_start );
+
+                                    println!("right_index is {:?}",right_index );
                                 }
 
                                 // redirect
@@ -294,12 +334,16 @@ fn start_dash(){
 
                                             input_ele.remove(right_index);
                                             input_ele.remove(right_index);
+                                            local_command_end-=2;
                                         }
                                         close(ret_write);
                                     }    
                                 }                                
                             }
-                            let length=input_ele.len();
+                            if print_flag==0{
+                                println!("---------------" );
+                            }    
+                            // let length=input_ele.len();
                             if local_command_end-local_command_start>0{
                                 if input_ele[local_command_end-1]=="&"{
                                     // so will this change parents' input_ele
@@ -322,6 +366,7 @@ fn start_dash(){
                             p_argv.push(std::ptr::null());
                             let p: *const *const c_char = p_argv.as_ptr();
                             execvp(c_command.as_ptr(),p);
+                            libc::exit(0);
                         }
                         // history_store.push(input.clone());
                         // println!("length is {}",job_store.len() );
@@ -339,6 +384,14 @@ fn start_dash(){
                             let fork_result_str=String::from(fork_result.to_string());
                             job_store.push(fork_result_str);
                             job_store.push(input_string);
+                        }
+                        else{
+                            let mut my_num: i32 = 10;
+                            let status: *mut i32 = &mut my_num;
+                            // waitpid(fork_result,status,0);
+                            let ten_millis = time::Duration::from_millis(20);
+                            thread::sleep(ten_millis);
+                            kill(fork_result,15);   
                         }    
                     }
                     else if fork_result<0{
@@ -348,6 +401,11 @@ fn start_dash(){
                 j=j+2;
                 pipe_index=pipe_index-1;
                 local_command_start=local_command_end+1;
+                if print_flag==0{
+                    if local_command_start<input_ele.len(){
+                        println!("-#########one turn {:?} {}",input_ele[local_command_start],local_command_start );
+                    }
+                }
                 local_command_end=local_command_start;  // they should on the same step 
 
                 // println!("other end is {:?}",local_command_end );
@@ -357,18 +415,19 @@ fn start_dash(){
             // in parent's process
             // close the pipe
             unsafe{
-                for i in 0..pipe_count{
+                // println!("---------before pringlin");
+                for i in 0..pipe_count*2{
                     close(v[i]);
                 }                
-
+                // println!("---------after pringlin");
                 // wait or not wait
-                if input_ele[input_ele.len()-1]!="&"{
-                    for i in 0..pipe_count{
-                        let mut my_num: i32 = 10;
-                        let status: *mut i32 = &mut my_num;
-                        wait(status);
-                    }
-                }    
+                // if input_ele[input_ele.len()-1]!="&"{
+                //     for i in 0..pipe_count+1{
+                //         let mut my_num: i32 = 10;
+                //         let status: *mut i32 = &mut my_num;
+                //         wait(status);
+                //     }
+                // }    
             }
 
             // store to history

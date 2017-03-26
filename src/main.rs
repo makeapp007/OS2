@@ -362,6 +362,7 @@ fn start_dash(){
                                 if input_ele[local_command_end-1]=="&"{
                                     // so will this change parents' input_ele
                                     input_ele.remove(local_command_end-1);
+                                    local_command_end-=1;
 
                                 }
                             }                                        
@@ -441,8 +442,10 @@ fn start_dash(){
                 }                
 
                 // wait
+                    // println!("i am in parent2");
                 if input_ele[input_ele.len()-1]=="&"{
-                    
+                    // println!("i am in parent");
+
                 }
                 else{                
                     let mut my_num: i32 = 10;

@@ -1,3 +1,4 @@
+use std::{sync, thread};
 use std::cmp::PartialEq;
 use std::cmp::Ordering;
 use std::ops::Deref;
@@ -119,7 +120,16 @@ impl<T> RwLock<T> {
                 if guard[0]>0 || guard[2]>0 {
                     // active reader and writer 
                     guard[3]+=1;
-                    guard=self.reader_cv.wait(guard).unwrap();
+                    // guard=self.reader_cv.wait(guard).unwrap();
+                    let cv=Condvar::new();
+                    // get the vec
+                    let cv_get=unsafe{
+                        &mut *(self.writer_cv.get())
+                    };
+                    cv_get.push(cv);
+                    // wait
+                    let length=cv_get.len();
+                    guard=cv_get[length].wait(guard).unwrap();
                     guard[3]-=1;
                 }
                 guard[2]+=1;
@@ -134,7 +144,16 @@ impl<T> RwLock<T> {
                 if guard[2]>0 || guard[0]>0 || guard[1]>0{
                     // active reader and writer, and waiting reader
                     guard[3]+=1;
-                    guard=self.reader_cv.wait(guard).unwrap();   
+                    let cv=Condvar::new();
+                    // get the vec
+                    let cv_get=unsafe{
+                        &mut *(self.writer_cv.get())
+                    };
+                    cv_get.push(cv);
+                    // wait
+                    let length=cv_get.len();
+                    guard=cv_get[length].wait(guard).unwrap();
+
                     guard[3]-=1;
                 }
                 guard[2]+=1;
@@ -169,6 +188,7 @@ impl<'a, T> Deref for RwLockReadGuard<'a, T> {
 impl<'a, T> Drop for RwLockReadGuard<'a, T> {
     // ...
     fn drop(&mut self) {
+        println!("------------" );
         // unsafe { self.__lock.inner.read_unlock(); }
         // finish this reader
         // check Preference and decide to do notify or not
@@ -186,8 +206,15 @@ impl<'a, T> Drop for RwLockReadGuard<'a, T> {
                         let cv_get=unsafe{
                             &mut *(self.__lock.writer_cv.get())
                         };
-                        let cv=cv_get.pop().unwrap();
-                        cv.notify_one();
+                        println!("------------22");
+                        match cv_get.pop(){
+                            Some(x)=>x.notify_one(),
+                            None=>{},
+                        }
+                        println!("------------22_continue");
+                        // let cv=cv_get.pop().unwrap();
+                        // println!("------------{:?}",cv );
+                        // cv.notify_one();
                     }
                     else{
                         // Fifo
@@ -215,8 +242,13 @@ impl<'a, T> Drop for RwLockReadGuard<'a, T> {
                         let cv_get=unsafe{
                             &mut *(self.__lock.writer_cv.get())
                         };
-                        let cv=cv_get.pop().unwrap();
-                        cv.notify_one();
+                        // let cv=cv_get.pop().unwrap();
+                        // cv.notify_one();
+                        match cv_get.pop(){
+                            Some(x)=>x.notify_one(),
+                            None=>{},
+                        }
+
                     }
                     else{
                         // Fifo

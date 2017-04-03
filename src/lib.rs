@@ -72,7 +72,7 @@ impl<T> RwLock<T> {
             {
                 // lock the mutex
                 let mut guard = self.status.lock().unwrap();
-                while guard[2]>0 || guard[3]>0 { //autoderef
+                if guard[2]>0 || guard[3]>0 { //autoderef
                     guard[1]+=1;
                     guard=self.reader_cv.wait(guard).unwrap();
                     guard[1]-=1;
@@ -85,7 +85,7 @@ impl<T> RwLock<T> {
             // reader prefer
             {
                 let mut guard = self.status.lock().unwrap();
-                while guard[2]>0{
+                if guard[2]>0{
                     guard[1]+=1;
                     guard=self.reader_cv.wait(guard).unwrap();   
                     guard[1]-=1;
@@ -114,7 +114,7 @@ impl<T> RwLock<T> {
             {
                 // lock the mutex
                 let mut guard = self.status.lock().unwrap();
-                while guard[0]>0 || guard[2]>0 {
+                if guard[0]>0 || guard[2]>0 {
                     guard[3]+=1;
                     guard=self.reader_cv.wait(guard).unwrap();
                     guard[3]-=1;
@@ -128,7 +128,7 @@ impl<T> RwLock<T> {
             // reader prefer
             {
                 let mut guard = self.status.lock().unwrap();
-                while guard[2]>0 || guard[0]>0 || guard[1]>0{
+                if guard[2]>0 || guard[0]>0 || guard[1]>0{
                     guard[3]+=1;
                     guard=self.reader_cv.wait(guard).unwrap();   
                     guard[3]-=1;

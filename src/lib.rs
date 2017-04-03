@@ -73,7 +73,7 @@ impl<T> RwLock<T> {
             {
                 // lock the mutex
                 let mut guard = self.status.lock().unwrap();
-                if guard[2]>0 || guard[3]>0 { //autoderef
+                while guard[2]>0 || guard[3]>0 { //autoderef
                     // active and waiting writer
                     guard[1]+=1;
                     guard=self.reader_cv.wait(guard).unwrap();
@@ -87,7 +87,7 @@ impl<T> RwLock<T> {
             // reader prefer
             {
                 let mut guard = self.status.lock().unwrap();
-                if guard[2]>0{
+                while guard[2]>0{
                     // active writer
                     guard[1]+=1;
                     guard=self.reader_cv.wait(guard).unwrap();   
@@ -117,7 +117,7 @@ impl<T> RwLock<T> {
             {
                 // lock the mutex
                 let mut guard = self.status.lock().unwrap();
-                if guard[0]>0 || guard[2]>0 {
+                while guard[0]>0 || guard[2]>0 {
                     // active reader and writer 
                     guard[3]+=1;
                     // guard=self.reader_cv.wait(guard).unwrap();
@@ -129,7 +129,7 @@ impl<T> RwLock<T> {
                     cv_get.push(cv);
                     // wait
                     let length=cv_get.len();
-                    guard=cv_get[length].wait(guard).unwrap();
+                    guard=cv_get[length-1].wait(guard).unwrap();
                     guard[3]-=1;
                 }
                 guard[2]+=1;
@@ -141,7 +141,7 @@ impl<T> RwLock<T> {
             // reader prefer
             {
                 let mut guard = self.status.lock().unwrap();
-                if guard[2]>0 || guard[0]>0 || guard[1]>0{
+                while guard[2]>0 || guard[0]>0 || guard[1]>0{
                     // active reader and writer, and waiting reader
                     guard[3]+=1;
                     let cv=Condvar::new();
@@ -152,7 +152,7 @@ impl<T> RwLock<T> {
                     cv_get.push(cv);
                     // wait
                     let length=cv_get.len();
-                    guard=cv_get[length].wait(guard).unwrap();
+                    guard=cv_get[length-1].wait(guard).unwrap();
 
                     guard[3]-=1;
                 }
@@ -188,7 +188,7 @@ impl<'a, T> Deref for RwLockReadGuard<'a, T> {
 impl<'a, T> Drop for RwLockReadGuard<'a, T> {
     // ...
     fn drop(&mut self) {
-        println!("------------" );
+        // println!("------------" );
         // unsafe { self.__lock.inner.read_unlock(); }
         // finish this reader
         // check Preference and decide to do notify or not
@@ -200,18 +200,18 @@ impl<'a, T> Drop for RwLockReadGuard<'a, T> {
                 // no active reader and writer 
                 if guard[3]>0{
                     // if waiting writer exists,schedule it
-                    guard[3]-=1;
+                    // guard[3]-=1;
                     if self.__lock.order==Order::Lifo{
 
                         let cv_get=unsafe{
                             &mut *(self.__lock.writer_cv.get())
                         };
-                        println!("------------22");
+                        // println!("------------22");
                         match cv_get.pop(){
                             Some(x)=>x.notify_one(),
                             None=>{},
                         }
-                        println!("------------22_continue");
+                        // println!("------------22_continue");
                         // let cv=cv_get.pop().unwrap();
                         // println!("------------{:?}",cv );
                         // cv.notify_one();
@@ -237,7 +237,7 @@ impl<'a, T> Drop for RwLockReadGuard<'a, T> {
                 // no active reader and writer and no waiting reader
                 if guard[3]>0{
                     // if waiting writer exists
-                    guard[3]-=1;
+                    // guard[3]-=1;
                     if self.__lock.order==Order::Lifo{
                         let cv_get=unsafe{
                             &mut *(self.__lock.writer_cv.get())
@@ -300,7 +300,7 @@ impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
             guard[2]-=1;
             if guard[3]>0{
                 // if exists waiting writer
-                guard[3]-=1;
+                // guard[3]-=1;
                 if self.__lock.order==Order::Lifo{
                     let cv_get=unsafe{
                         &mut *(self.__lock.writer_cv.get())
@@ -321,8 +321,8 @@ impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
             else{
                 // if waiting reader and no waiting writer
                 if guard[1]>0{
-                    guard[0]=guard[1];
-                    guard[1]=0;
+                    // guard[0]=guard[1];
+                    // guard[1]=0;
                     // notify all
                     self.__lock.reader_cv.notify_all();
                 }
@@ -335,14 +335,14 @@ impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
             guard[2]-=1;
             if guard[1]>0{
                 // if exists waiting reader
-                guard[0]=guard[1];
-                guard[1]=0;
+                // guard[0]=guard[1];
+                // guard[1]=0;
                 self.__lock.reader_cv.notify_all();
             }
             else{
                 // if exists waiting writer
                 if guard[3]>0{
-                    guard[3]-=1;
+                    // guard[3]-=1;
                     if self.__lock.order==Order::Lifo{
                         let cv_get=unsafe{
                             &mut *(self.__lock.writer_cv.get())
@@ -365,4 +365,5 @@ impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
     }
 
 }
+
 

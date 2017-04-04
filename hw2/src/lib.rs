@@ -367,3 +367,100 @@ impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
 }
 
 
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use std::sync::mpsc::channel;
+//     use std::thread;
+//     use std::sync::Arc;
+//     #[test]
+//     fn test_rw_arc() {
+//         let arc = Arc::new(RwLock::new(0, Preference::Writer, Order::Lifo));
+//         let arc2 = arc.clone();
+//         let (tx, rx) = channel();
+
+//         thread::spawn(move|| {
+//             println!("writer spawned!");
+//             let mut lock = arc2.write().unwrap();
+//             println!("writer active!");
+//             for _ in 0..10 {
+//                 let tmp = *lock;
+//                 *lock = -1;
+//                 thread::yield_now();
+//                 *lock = tmp + 1;
+//             }
+//             tx.send(()).unwrap();
+//             println!("writer inactive!")
+//         });
+
+//         // Readers try to catch the writer in the act
+//         let mut children = Vec::new();
+//         for _ in 0..5 {
+//             let arc3 = arc.clone();
+//             children.push(thread::spawn(move|| {
+//                 println!("reader spawned!");
+//                 let lock = arc3.read().unwrap();
+//                 println!("reader active!");
+//                 println!("{}",*lock >= 0);
+//                 assert!(*lock >= 0);
+
+//                 println!("reader inactive!")
+//             }));
+//         }
+
+//         // Wait for children to pass their asserts
+//         for r in children {
+//             assert!(r.join().is_ok());
+//         }
+
+//         // Wait for writer to finish
+//         rx.recv().unwrap();
+//         let lock = arc.read().unwrap();
+//         assert_eq!(*lock, 10);
+//     }
+// }
+
+fn main(){
+    // let lock = RwLock::new(5,Preference::Writer,Order::Lifo);
+
+    // // many reader locks can be held at once
+    // {
+    //     let r1 = lock.read().unwrap();
+    //     let r2 = lock.read().unwrap();
+    //     assert_eq!(*r1, 5);
+    //     assert_eq!(*r2, 5);
+    // } // read locks are dropped at this point
+
+    // // only one write lock may be held, however
+    // {
+    //     let mut w = lock.write().unwrap();
+    //     *w += 1;
+    //     assert_eq!(*w, 6);
+    // } // write lock is dropped here
+
+
+    let bbq = sync::Arc::new(RwLock::new(5,Preference::Writer,Order::Lifo));
+    let bbq1 = bbq.clone();
+    let t1 = thread::spawn(move || {
+        for i in 0..50 {
+            bbq1.read().unwrap();
+        }
+    });
+    let bbq2 = bbq.clone();
+    let t2 = thread::spawn(move || {
+        for _ in 0..50 {
+            let mut a=bbq2.write().unwrap();
+            *a+=1;
+            // assert_eq!(*a,6);
+
+        }
+    });
+
+    t1.join().unwrap();
+    t2.join().unwrap();
+    println!("{:?}",*bbq.read().unwrap() );
+}
+
+
+
